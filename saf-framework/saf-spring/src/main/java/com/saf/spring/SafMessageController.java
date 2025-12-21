@@ -1,19 +1,12 @@
 package com.saf.spring;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.saf.core.ActorRef;
-import com.saf.core.ActorSystem;
-import com.saf.core.Message;
+import com.saf.core.*;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Endpoint REST générique reçu par le framework.
- * Un autre microservice peut POSTer ici pour envoyer un message à un acteur local.
- */
 @RestController
 @RequestMapping("/actors")
 public class SafMessageController {
-
     private final ActorSystem system = SAF.getActorSystem();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -33,6 +26,13 @@ public class SafMessageController {
         Class<?> clazz = Class.forName(dto.messageType);
         Message msg = (Message) mapper.readValue(dto.payloadJson, clazz);
 
-        local.tell(msg);
+        ActorRef sender = system.findLocal(dto.senderActor);
+        if (sender == null) {
+            System.err.println("[SafMessageController] Sender actor not found: " + dto.senderActor);
+            sender = new NullActorRef(); // Utilise un expéditeur par défaut si non trouvé
+        }
+
+        local.mailbox().enqueue(new MessageEnvelope(msg, sender));
     }
+
 }

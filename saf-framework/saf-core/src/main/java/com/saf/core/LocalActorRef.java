@@ -1,15 +1,11 @@
 package com.saf.core;
 
-/**
- * Implémentation d’un ActorRef pour les acteurs locaux (dans la même JVM)
- */
-class LocalActorRef implements ActorRef {
-
+public class LocalActorRef implements ActorRef {
     private final String name;
     private final Actor actor;
     private final Mailbox mailbox;
 
-    LocalActorRef(String name, Actor actor, Mailbox mailbox) {
+    public LocalActorRef(String name, Actor actor, Mailbox mailbox) {
         this.name = name;
         this.actor = actor;
         this.mailbox = mailbox;
@@ -25,11 +21,17 @@ class LocalActorRef implements ActorRef {
         mailbox.enqueue(new MessageEnvelope(msg, null));
     }
 
-    Mailbox mailbox() {
+    @Override
+    public void tell(Message msg, ActorContext ctx) {
+
+    }
+
+    @Override
+    public Mailbox mailbox() {  // Assure-toi que cette méthode est implémentée
         return mailbox;
     }
 
-    Actor actor() {
+    public Actor actor() {
         return actor;
     }
 }

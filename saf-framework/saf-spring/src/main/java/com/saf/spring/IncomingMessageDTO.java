@@ -1,10 +1,8 @@
 package com.saf.spring;
 
-/**
- * Format JSON des messages échangés entre microservices.
- */
-class IncomingMessageDTO {
+public class IncomingMessageDTO {
     public String targetActor;
     public String messageType;
     public String payloadJson;
+    public String senderActor;  //pour renvoie de confirmation de réception
 }

@@ -16,7 +16,8 @@ class SpringActorSystem extends ActorSystem {
     }
 
     @Override
-    public ActorRef remoteActor(String targetBaseUrl, String actorName) {
-        return new RestRemoteActorRef(targetBaseUrl, actorName);
+    public ActorRef remoteActor(String baseUrl, String actorName) {
+        // Utilise un nom d'expéditeur par défaut ou passe-le en paramètre
+        return new RestRemoteActorRef(baseUrl, actorName, "defaultSender");
     }
 }

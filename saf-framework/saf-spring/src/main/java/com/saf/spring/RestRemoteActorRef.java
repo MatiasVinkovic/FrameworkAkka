@@ -1,6 +1,7 @@
 package com.saf.spring;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.saf.core.ActorContext;
 import com.saf.core.ActorRef;
 import com.saf.core.Message;
 import org.springframework.http.HttpEntity;
@@ -8,20 +9,23 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Référence vers un acteur dans un autre microservice.
- * Envoie les messages en POST JSON sur {baseUrl}/actors/messages.
- */
-class RestRemoteActorRef implements ActorRef {
-
+public class RestRemoteActorRef implements ActorRef {
     private final String baseUrl;
     private final String actorName;
+    private final String senderActorName;
     private final RestTemplate http = new RestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    RestRemoteActorRef(String baseUrl, String actorName) {
+    // Constructeur avec expéditeur
+    public RestRemoteActorRef(String baseUrl, String actorName, String senderActorName) {
         this.baseUrl = baseUrl;
         this.actorName = actorName;
+        this.senderActorName = senderActorName;
+    }
+
+    // Constructeur sans expéditeur (utilise un expéditeur par défaut)
+    public RestRemoteActorRef(String baseUrl, String actorName) {
+        this(baseUrl, actorName, "defaultSender");
     }
 
     @Override
@@ -36,6 +40,7 @@ class RestRemoteActorRef implements ActorRef {
             dto.targetActor = actorName;
             dto.messageType = msg.getClass().getName();
             dto.payloadJson = mapper.writeValueAsString(msg);
+            dto.senderActor = senderActorName;
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -46,5 +51,15 @@ class RestRemoteActorRef implements ActorRef {
         } catch (Exception e) {
             throw new RuntimeException("Failed to send remote message to " + actorName, e);
         }
+    }
+
+    @Override
+    public void tell(Message msg, ActorContext ctx) {
+
+    }
+
+    @Override
+    public com.saf.core.Mailbox mailbox() {
+        throw new UnsupportedOperationException("mailbox() not supported for remote actors");
     }
 }

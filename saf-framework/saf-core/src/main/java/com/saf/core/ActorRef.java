@@ -6,4 +6,6 @@ package com.saf.core;
 public interface ActorRef {
     String getName();
     void tell(Message msg);
+    void tell(Message msg, ActorContext ctx);  // surcharge
+    Mailbox mailbox(); // Ajoute cette méthode
 }

@@ -3,22 +3,18 @@ package com.saf.core;
 import java.util.LinkedList;
 import java.util.Queue;
 
-/**
- * Boîte aux lettres d'un acteur local.
- */
-class Mailbox {
-
+public class Mailbox {
     private final Queue<MessageEnvelope> queue = new LinkedList<>();
 
-    void enqueue(MessageEnvelope env) {
+    public void enqueue(MessageEnvelope env) {  // Assure-toi que cette méthode est publique
         queue.add(env);
     }
 
-    MessageEnvelope dequeue() {
+    public MessageEnvelope dequeue() {
         return queue.poll();
     }
 
-    boolean isEmpty() {
+    public boolean isEmpty() {
         return queue.isEmpty();
     }
 }
