@@ -6,3 +6,5 @@ package com.saf.core;
 public interface Actor {
     void onReceive(Message msg, ActorContext ctx) throws Exception;
 }
+
+
