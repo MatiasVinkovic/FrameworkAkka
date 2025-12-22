@@ -5,9 +5,12 @@ import com.saf.core.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Contrôleur REST interne au framework SAF.
- * Il permet la réception de messages distants et leur injection dans le système d'acteurs local.
+ * Gère la réception de messages distants (Asynchrones et Synchrones).
  */
 @RestController
 @RequestMapping("/actors")
@@ -15,45 +18,75 @@ public class SafMessageController {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // Injection de l'ActorSystem unique géré par Spring
     @Autowired
     private ActorSystem actorSystem;
 
+    /**
+     * Endpoint pour le mode ASYNCHRONE (tell).
+     * Libère le thread HTTP immédiatement après l'ajout en mailbox.
+     */
     @PostMapping("/messages")
     public void receive(@RequestBody IncomingMessageDTO dto) throws Exception {
+        if (actorSystem == null) return;
 
-        // 1. Sécurité : Vérifier que le moteur d'acteurs est bien démarré
-        if (actorSystem == null) {
-            System.err.println("[SafMessageController] ERREUR : ActorSystem non injecté par Spring.");
-            return;
-        }
-
-        // 2. Recherche de l'acteur cible dans le registre local (ceux créés par spawn ou au start)
         ActorRef target = actorSystem.findLocal(dto.targetActor);
-
         if (target == null) {
             System.err.println("[SafMessageController] Acteur cible introuvable : " + dto.targetActor);
             return;
         }
 
-        // 3. Transformation du JSON en véritable objet Message Java via la réflexion
-        // Utilise le nom de classe complet envoyé par le client (ex: com.saf.messages.OrderRequest)
-        Class<?> clazz = Class.forName(dto.messageType);
-        Message msg = (Message) mapper.readValue(dto.payloadJson, clazz);
+        Message msg = deserialize(dto);
+        ActorRef sender = resolveSender(dto.senderActor);
 
-        // 4. Identification de l'expéditeur (Sender)
-        // Si l'expéditeur n'est pas trouvé localement, on utilise un NullActorRef pour éviter les NullPointerException
-        ActorRef sender = actorSystem.findLocal(dto.senderActor);
-        if (sender == null) {
-            sender = new NullActorRef();
-        }
-
-        // 5. Injection du message dans la Mailbox de l'acteur
-        // Note : On passe par target.mailbox().enqueue() car target.tell() depuis un contrôleur
-        // ne dispose pas de l'ActorContext interne requis par la signature standard.
+        // Injection classique dans la mailbox
         target.mailbox().enqueue(new MessageEnvelope(msg, sender));
+        System.out.println("[REST-IN-ASYNC] " + msg.getClass().getSimpleName() + " -> " + dto.targetActor);
+    }
 
-        // Logging pour le monitoring en temps réel dans la console
-        System.out.println("[REST-IN] " + msg.getClass().getSimpleName() + " -> " + dto.targetActor);
+    /**
+     * Endpoint pour le mode SYNCHRONE (ask).
+     * Attend que l'acteur réponde via context.reply() pour renvoyer le résultat.
+     */
+    @PostMapping("/messages/ask")
+    public Object ask(@RequestBody IncomingMessageDTO dto) throws Exception {
+        if (actorSystem == null) throw new RuntimeException("ActorSystem non initialisé");
+
+        ActorRef target = actorSystem.findLocal(dto.targetActor);
+        if (target == null) throw new RuntimeException("Acteur introuvable : " + dto.targetActor);
+
+        Message msg = deserialize(dto);
+
+        // On crée une promesse qui sera complétée quand l'acteur répondra
+        CompletableFuture<Object> futureResponse = new CompletableFuture<>();
+
+        // Création d'un expéditeur temporaire qui sert de "callback"
+        ActorRef temporarySender = new ActorRef() {
+            @Override public String getName() { return "temp-ask-handler"; }
+            @Override public void tell(Message m) { futureResponse.complete(m); }
+            @Override public void tell(Message m, ActorContext ctx) { futureResponse.complete(m); }
+            @Override public <T> CompletableFuture<T> ask(Object o, Class<T> c) { return null; }
+            @Override public Mailbox mailbox() { return null; }
+        };
+
+        // On envoie le message avec notre expéditeur temporaire
+        target.mailbox().enqueue(new MessageEnvelope(msg, temporarySender));
+
+        // On attend la réponse (timeout de 5 secondes pour éviter de bloquer Spring indéfiniment)
+        try {
+            System.out.println("[REST-IN-SYNC] Attente réponse pour : " + msg.getClass().getSimpleName());
+            return futureResponse.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Timeout : l'acteur n'a pas répondu dans les temps.");
+        }
+    }
+
+    private Message deserialize(IncomingMessageDTO dto) throws Exception {
+        Class<?> clazz = Class.forName(dto.messageType);
+        return (Message) mapper.readValue(dto.payloadJson, clazz);
+    }
+
+    private ActorRef resolveSender(String name) {
+        ActorRef sender = actorSystem.findLocal(name);
+        return (sender != null) ? sender : new NullActorRef();
     }
 }

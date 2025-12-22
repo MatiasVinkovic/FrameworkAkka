@@ -1,11 +1,20 @@
 package com.saf.core;
 
+import java.util.concurrent.CompletableFuture;
+
 public class LocalActorRef implements ActorRef {
     private final String name;
-    private  Actor actor;
+    private Actor actor;
     private final Mailbox mailbox;
-    private final Class<? extends Actor> actorClass; // On stocke la recette de cuisine
-    private boolean blocked = false; // L'état par défaut est "actif"
+    private final Class<? extends Actor> actorClass;
+    private boolean blocked = false;
+
+    public LocalActorRef(String name, Actor actor, Mailbox mailbox, Class<? extends Actor> actorClass) {
+        this.name = name;
+        this.actor = actor;
+        this.actorClass = actorClass;
+        this.mailbox = mailbox;
+    }
 
     public boolean isBlocked() {
         return blocked;
@@ -14,39 +23,56 @@ public class LocalActorRef implements ActorRef {
     public void setBlocked(boolean blocked) {
         this.blocked = blocked;
     }
-    public LocalActorRef(String name, Actor actor, Mailbox mailbox, Class<? extends Actor> actorClass) {
-        this.name = name;
-        this.actor = actor;
-        this.actorClass = actorClass;
-        this.mailbox = mailbox;
-    }
 
     @Override
     public String getName() {
         return name;
     }
 
-    // Méthode pour remplacer l'instance crashée par une neuve
     public void restart() throws Exception {
         this.actor = actorClass.getDeclaredConstructor().newInstance();
     }
 
     public Actor actor() { return actor; }
+
     public Class<? extends Actor> getActorClass() { return actorClass; }
 
     @Override
     public void tell(Message msg) {
+        // Envoi asynchrone sans expéditeur spécifié [cite: 19, 34]
         mailbox.enqueue(new MessageEnvelope(msg, null));
     }
 
     @Override
     public void tell(Message msg, ActorContext ctx) {
+        // Envoi asynchrone avec extraction de l'expéditeur depuis le contexte
+        mailbox.enqueue(new MessageEnvelope(msg, ctx.getSender()));
+    }
 
+    /**
+     * Implémentation du mode SYNCHRONE (ask) en local[cite: 19, 34].
+     */
+    @Override
+    public <T> CompletableFuture<T> ask(Object message, Class<T> responseType) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+
+        // On crée un expéditeur temporaire pour capturer la réponse
+        ActorRef callback = new ActorRef() {
+            @Override public String getName() { return "ask-callback"; }
+            @Override public void tell(Message m) { future.complete((T) m); }
+            @Override public void tell(Message m, ActorContext ctx) { future.complete((T) m); }
+            @Override public <T1> CompletableFuture<T1> ask(Object o, Class<T1> c) { return null; }
+            @Override public Mailbox mailbox() { return null; }
+        };
+
+        // On envoie le message dans la mailbox avec notre callback comme expéditeur
+        mailbox.enqueue(new MessageEnvelope((Message) message, callback));
+
+        return future;
     }
 
     @Override
-    public Mailbox mailbox() {  // Assure-toi que cette méthode est implémentée
+    public Mailbox mailbox() {
         return mailbox;
     }
-
 }

@@ -13,22 +13,22 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Implémentation d'ActorRef pour la communication inter-microservices[cite: 19].
- * Utilise Eureka pour localiser dynamiquement les instances[cite: 43].
+ * Implémentation d'ActorRef pour la communication inter-microservices[cite: 12, 19].
+ * Utilise Eureka pour localiser dynamiquement les instances de services[cite: 43].
  */
 public class RestRemoteActorRef implements ActorRef {
     private final DiscoveryClient discoveryClient;
     private final String serviceName;
     private final String actorName;
     private final String senderActorName;
-    private String fixedBaseUrl; // Utilisé si on passe une URL en dur au lieu d'un serviceId
+    private String fixedBaseUrl;
 
     private final RestTemplate http = new RestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // Constructeur avec DiscoveryClient : RÉSOLUTION LAZY (Pas de .get(0) ici !)
     public RestRemoteActorRef(DiscoveryClient discoveryClient, String serviceName, String actorName, String senderActorName) {
         this.discoveryClient = discoveryClient;
         this.serviceName = serviceName;
@@ -40,7 +40,6 @@ public class RestRemoteActorRef implements ActorRef {
         this(discoveryClient, serviceName, actorName, "defaultSender");
     }
 
-    // Constructeur avec URL fixe (pour tests locaux ou adresses connues)
     public RestRemoteActorRef(String baseUrl, String actorName, String senderActorName) {
         this.discoveryClient = null;
         this.serviceName = null;
@@ -54,52 +53,90 @@ public class RestRemoteActorRef implements ActorRef {
         return actorName;
     }
 
+    /**
+     * Résout l'URL cible via le DiscoveryClient (Eureka) ou une URL fixe[cite: 43].
+     */
+    private String resolveTargetUrl() {
+        if (fixedBaseUrl != null) return fixedBaseUrl;
+
+        if (discoveryClient != null) {
+            List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
+            if (!instances.isEmpty()) {
+                // Stratégie de sélection de la première instance disponible [cite: 21]
+                ServiceInstance instance = instances.get(0);
+                return "http://" + instance.getHost() + ":" + instance.getPort();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Envoi asynchrone (Fire-and-Forget).
+     */
     @Override
     public void tell(Message msg) {
-        String targetUrl = "";
         LoggerService.log("INFO", actorName, "REMOTE_SEND",
                 "Sending " + msg.getClass().getSimpleName() + " via REST to " + serviceName);
         try {
-            // 1. Détermination de l'URL de base
-            if (fixedBaseUrl != null) {
-                targetUrl = fixedBaseUrl;
-            } else if (discoveryClient != null) {
-                // Résolution dynamique via Eureka au moment de l'envoi (Résilience) [cite: 14]
-                List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
-                if (instances.isEmpty()) {
-                    System.err.println("[SAF-REMOTE] Abandon : Le service '" + serviceName + "' est introuvable sur Eureka.");
-                    return;
-                }
-                // Stratégie simple : on prend la première instance (Load Balancing possible ici) [cite: 21, 36]
-                ServiceInstance instance = instances.get(0);
-                targetUrl = "http://" + instance.getHost() + ":" + instance.getPort();
+            String baseUrl = resolveTargetUrl();
+            if (baseUrl == null) {
+                System.err.println("[SAF-REMOTE] Service '" + serviceName + "' introuvable sur Eureka.");
+                return;
             }
 
-            // 2. Préparation du DTO
-            IncomingMessageDTO dto = new IncomingMessageDTO();
-            dto.targetActor = actorName;
-            dto.messageType = msg.getClass().getName();
-            dto.payloadJson = mapper.writeValueAsString(msg);
-            dto.senderActor = senderActorName;
+            IncomingMessageDTO dto = createDTO(msg);
+            HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
 
-            // 3. Envoi HTTP asynchrone (via REST) [cite: 34, 44]
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<IncomingMessageDTO> entity = new HttpEntity<>(dto, headers);
-
-            String fullPath = targetUrl + "/actors/messages";
-            http.postForEntity(fullPath, entity, Void.class);
+            // Appel HTTP POST sans attendre de corps de réponse [cite: 42, 44]
+            http.postForEntity(baseUrl + "/actors/messages", entity, Void.class);
 
         } catch (Exception e) {
-            // Log de l'erreur sans faire crasher l'application appelante (Tolérance aux pannes) [cite: 20, 35]
-            System.err.println("[SAF-REMOTE] Échec critique lors de l'envoi vers " + actorName + " : " + e.getMessage());
+            System.err.println("[SAF-REMOTE] Échec de l'envoi asynchrone : " + e.getMessage());
         }
+    }
+
+    /**
+     * Envoi synchrone (Request-Response).
+     * Attend une réponse du microservice distant.
+     */
+    @Override
+    public <T> CompletableFuture<T> ask(Object message, Class<T> responseType) {
+        // Exécution asynchrone de la requête réseau pour ne pas bloquer le thread appelant
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String baseUrl = resolveTargetUrl();
+                if (baseUrl == null) throw new RuntimeException("Service " + serviceName + " introuvable");
+
+                IncomingMessageDTO dto = createDTO((Message) message);
+                HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
+
+                // Appel HTTP POST vers l'endpoint synchrone dédié [cite: 42]
+                return http.postForObject(baseUrl + "/actors/messages/ask", entity, responseType);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Échec de la communication synchrone (ask) : " + e.getMessage(), e);
+            }
+        });
     }
 
     @Override
     public void tell(Message msg, ActorContext ctx) {
-        // Le contexte distant est géré via le champ senderActorName du DTO
         tell(msg);
+    }
+
+    private IncomingMessageDTO createDTO(Message msg) throws Exception {
+        IncomingMessageDTO dto = new IncomingMessageDTO();
+        dto.targetActor = actorName;
+        dto.messageType = msg.getClass().getName();
+        dto.payloadJson = mapper.writeValueAsString(msg);
+        dto.senderActor = senderActorName;
+        return dto;
+    }
+
+    private HttpEntity<IncomingMessageDTO> createHttpEntity(IncomingMessageDTO dto) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new HttpEntity<>(dto, headers);
     }
 
     @Override

@@ -6,4 +6,6 @@ package com.saf.core;
 public interface ActorContext {
     ActorRef self();
     ActorRef sender();
+    ActorRef getSender();
+    void reply(Message msg);
 }

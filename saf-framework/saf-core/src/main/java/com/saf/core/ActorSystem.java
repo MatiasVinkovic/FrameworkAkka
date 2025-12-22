@@ -11,6 +11,11 @@ public class ActorSystem {
         this.name = name;
     }
 
+    // Ajoutez cette méthode
+    public Map<String, LocalActorRef> getActors() {
+        return this.actors;
+    }
+
     public String getName() {
         return name;
     }
@@ -37,10 +42,7 @@ public class ActorSystem {
         return actors.get(actorName);
     }
 
-    // Dans ActorSystem.java
-    public Map<String, LocalActorRef> getActors() {
-        return this.actors;
-    }
+
 
     // Dans ActorSystem.java
     public void processOneCycle() {

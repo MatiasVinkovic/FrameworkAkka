@@ -1,5 +1,7 @@
 package com.saf.core;
 
+import java.util.concurrent.CompletableFuture;
+
 public class NullActorRef implements ActorRef {
     @Override
     public String getName() {
@@ -14,6 +16,14 @@ public class NullActorRef implements ActorRef {
     @Override
     public void tell(Message msg, ActorContext ctx) {
 
+    }
+
+    /**
+     * Implémentation obligatoire de ask pour la compilation.
+     */
+    @Override
+    public <T> CompletableFuture<T> ask(Object message, Class<T> responseType) {
+        return CompletableFuture.failedFuture(new UnsupportedOperationException("Impossible de faire un ask() sur NullActorRef"));
     }
 
     @Override
