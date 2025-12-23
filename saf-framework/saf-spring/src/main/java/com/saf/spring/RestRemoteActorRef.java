@@ -95,6 +95,8 @@ public class RestRemoteActorRef implements ActorRef {
         }
     }
 
+
+
     /**
      * Envoi synchrone (Request-Response).
      * Attend une réponse du microservice distant.
@@ -121,7 +123,50 @@ public class RestRemoteActorRef implements ActorRef {
 
     @Override
     public void tell(Message msg, ActorContext ctx) {
-        tell(msg);
+        // On extrait le nom de l'acteur actuel depuis le contexte
+        String dynamicSender = (ctx != null && ctx.self() != null)
+                ? ctx.self().getName()
+                : this.senderActorName;
+
+        try {
+            String baseUrl = resolveTargetUrl();
+            if (baseUrl == null) return;
+
+            // On crée le DTO en passant explicitement le sender dynamique
+            IncomingMessageDTO dto = createDTO(msg);
+            dto.senderActor = dynamicSender; // ON FORCE LE SENDER DU CONTEXTE ICI
+
+            HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
+            http.postForEntity(baseUrl + "/actors/messages", entity, Void.class);
+        } catch (Exception e) {
+            System.err.println("[SAF-REMOTE] Erreur : " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void tell(Message msg, ActorRef sender) {
+        // 1. On récupère le nom du sender s'il existe, sinon on prend le nom par défaut
+        String senderName = (sender != null) ? sender.getName() : this.senderActorName;
+
+        LoggerService.log("INFO", actorName, "REMOTE_SEND",
+                "Sending " + msg.getClass().getSimpleName() + " with sender " + senderName);
+
+        try {
+            String baseUrl = resolveTargetUrl();
+            if (baseUrl == null) return;
+
+            // 2. On crée le DTO
+            IncomingMessageDTO dto = createDTO(msg);
+
+            // 3. ON FORCE LE SENDER DYNAMIQUE ICI
+            dto.senderActor = senderName;
+
+            HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
+            http.postForEntity(baseUrl + "/actors/messages", entity, Void.class);
+
+        } catch (Exception e) {
+            System.err.println("[SAF-REMOTE] Erreur lors de l'envoi : " + e.getMessage());
+        }
     }
 
     private IncomingMessageDTO createDTO(Message msg) throws Exception {

@@ -8,4 +8,5 @@ public class MessageEnvelope {
         this.message = message;
         this.sender = sender;
     }
+
 }

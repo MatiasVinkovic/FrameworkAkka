@@ -43,14 +43,25 @@ public class LocalActorRef implements ActorRef {
         mailbox.enqueue(new MessageEnvelope(msg, null));
     }
 
+//    @Override
+//    public void tell(Message msg, ActorContext ctx) {
+//        // Envoi asynchrone avec extraction de l'expéditeur depuis le contexte
+//        mailbox.enqueue(new MessageEnvelope(msg, ctx.getSender()));
+//    }
+
     @Override
     public void tell(Message msg, ActorContext ctx) {
-        // Envoi asynchrone avec extraction de l'expéditeur depuis le contexte
-        mailbox.enqueue(new MessageEnvelope(msg, ctx.getSender()));
+        this.tell(msg, ctx.self()); // On extrait le "self" du contexte
+    }
+
+
+    public void tell(Message msg, ActorRef sender) {
+        // On met le message et l'expéditeur directement dans l'enveloppe
+        mailbox.enqueue(new MessageEnvelope(msg, sender));
     }
 
     /**
-     * Implémentation du mode SYNCHRONE (ask) en local[cite: 19, 34].
+     * Implémentation du mode SYNCHRONE (ask) en local
      */
     @Override
     public <T> CompletableFuture<T> ask(Object message, Class<T> responseType) {
@@ -61,6 +72,12 @@ public class LocalActorRef implements ActorRef {
             @Override public String getName() { return "ask-callback"; }
             @Override public void tell(Message m) { future.complete((T) m); }
             @Override public void tell(Message m, ActorContext ctx) { future.complete((T) m); }
+
+            @Override
+            public void tell(Message msg, ActorRef sender) {
+
+            }
+
             @Override public <T1> CompletableFuture<T1> ask(Object o, Class<T1> c) { return null; }
             @Override public Mailbox mailbox() { return null; }
         };

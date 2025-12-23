@@ -1,0 +1,10 @@
+com/saf/spring/SpringActorSystem.class
+com/saf/spring/IncomingMessageDTO.class
+com/saf/spring/SAFAutoConfiguration.class
+com/saf/spring/SafSpringApplication.class
+com/saf/spring/SAFShell.class
+com/saf/spring/SafMessageController.class
+com/saf/spring/SAF.class
+com/saf/spring/ActorSupervisor.class
+com/saf/spring/RestRemoteActorRef.class
+com/saf/spring/SafMessageController$1.class

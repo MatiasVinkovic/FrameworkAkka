@@ -11,5 +11,6 @@ public class LoggerService {
         // Format d'audit : [TIMESTAMP] [LEVEL] [ACTOR] ACTION -> DETAILS
         System.out.printf("[%s] [%s] [%s] %s -> %s%n",
                 timestamp, level, actorName, action.toUpperCase(), details);
+
     }
 }

@@ -11,6 +11,7 @@ public interface ActorRef {
     //communication synchrone
     void tell(Message msg);
     void tell(Message msg, ActorContext ctx);  // surcharge
+    void tell(Message msg, ActorRef sender);
 
     //communication asynchrone
     <T> CompletableFuture<T> ask(Object message, Class<T> responseType);

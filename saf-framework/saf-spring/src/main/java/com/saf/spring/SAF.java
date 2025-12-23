@@ -32,7 +32,7 @@ public final class SAF {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     system.processOneCycle(); // On vide les mailboxes de tous les acteurs
-                    Thread.sleep(100);       // Pause de 100ms pour ne pas saturer le CPU
+                    Thread.sleep(2000);       // Pause de 100ms pour ne pas saturer le CPU
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }

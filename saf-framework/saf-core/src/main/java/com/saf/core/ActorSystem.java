@@ -42,6 +42,18 @@ public class ActorSystem {
         return actors.get(actorName);
     }
 
+    public ActorRef select(String actorName) {
+        // 1. On regarde dans notre Map locale
+        ActorRef local = findLocal(actorName);
+        if (local != null) {
+            return local;
+        }
+
+        // 2. Si on ne le trouve pas, on appelle la méthode remoteActor
+        // (Qui sera surchargée dans la version Spring pour utiliser Eureka)
+        return remoteActor("UNKNOWN_SERVICE", actorName);
+    }
+
 
 
     // Dans ActorSystem.java

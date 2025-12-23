@@ -18,6 +18,11 @@ public class NullActorRef implements ActorRef {
 
     }
 
+    @Override
+    public void tell(Message msg, ActorRef sender) {
+
+    }
+
     /**
      * Implémentation obligatoire de ask pour la compilation.
      */

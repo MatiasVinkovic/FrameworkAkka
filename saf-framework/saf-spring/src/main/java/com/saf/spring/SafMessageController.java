@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+
+
 /**
  * Contrôleur REST interne au framework SAF.
  * Gère la réception de messages distants (Asynchrones et Synchrones).
@@ -17,6 +19,8 @@ import java.util.concurrent.TimeUnit;
 public class SafMessageController {
 
     private final ObjectMapper mapper = new ObjectMapper();
+    @Autowired
+    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
 
     @Autowired
     private ActorSystem actorSystem;
@@ -64,6 +68,12 @@ public class SafMessageController {
             @Override public String getName() { return "temp-ask-handler"; }
             @Override public void tell(Message m) { futureResponse.complete(m); }
             @Override public void tell(Message m, ActorContext ctx) { futureResponse.complete(m); }
+
+            @Override
+            public void tell(Message msg, ActorRef sender) {
+
+            }
+
             @Override public <T> CompletableFuture<T> ask(Object o, Class<T> c) { return null; }
             @Override public Mailbox mailbox() { return null; }
         };
@@ -80,13 +90,24 @@ public class SafMessageController {
         }
     }
 
+
+
     private Message deserialize(IncomingMessageDTO dto) throws Exception {
         Class<?> clazz = Class.forName(dto.messageType);
         return (Message) mapper.readValue(dto.payloadJson, clazz);
     }
 
-    private ActorRef resolveSender(String name) {
-        ActorRef sender = actorSystem.findLocal(name);
-        return (sender != null) ? sender : new NullActorRef();
+    private ActorRef resolveSender(String senderName) {
+        if (senderName == null || senderName.equals("defaultSender")) {
+            return new NullActorRef();
+        }
+
+        // 1. On cherche si l'acteur est local (cas rare en inter-ms)
+        ActorRef local = actorSystem.findLocal(senderName);
+        if (local != null) return local;
+
+        // 2. CORRECTION : Si pas local, on crée une référence DISTANTE vers le client
+        // On suppose ici que l'expéditeur vient du MS-CLIENT (ou on passe le nom du service dans le DTO)
+        return new RestRemoteActorRef(discoveryClient, "MS-CLIENT", senderName);
     }
 }
