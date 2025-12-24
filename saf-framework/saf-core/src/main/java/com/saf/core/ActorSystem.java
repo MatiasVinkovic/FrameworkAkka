@@ -28,6 +28,7 @@ public class ActorSystem {
             Actor actor = actorClass.getDeclaredConstructor().newInstance();
             Mailbox mailbox = new Mailbox();
             LocalActorRef ref = new LocalActorRef(actorName, actor, mailbox, actorClass);
+            LoggerService.log("INFO", ref.getName(), "BORN", "Actor created successfully ");
             actors.put(actorName, ref);
             return ref;
         } catch (Exception e) {
@@ -35,40 +36,22 @@ public class ActorSystem {
         }
     }
 
-
-
-
     public ActorRef findLocal(String actorName) {
         return actors.get(actorName);
     }
 
-    public ActorRef select(String actorName) {
-        // 1. On regarde dans notre Map locale
-        ActorRef local = findLocal(actorName);
-        if (local != null) {
-            return local;
-        }
 
-        // 2. Si on ne le trouve pas, on appelle la méthode remoteActor
-        // (Qui sera surchargée dans la version Spring pour utiliser Eureka)
-        return remoteActor("UNKNOWN_SERVICE", actorName);
-    }
-
-
-
-    // Dans ActorSystem.java
+    // méthode de supervision
     public void processOneCycle() {
         for (LocalActorRef ref : actors.values()) {
 
             if (ref.isBlocked()) {
                 // On saute cet acteur pour ce tour, ses messages restent dans la mailbox
-                //LoggerService.log("INFO", ref.getName(), "BLOCKED", "Acteur bloqué, impossible de communiquer");
+                LoggerService.log("INFO", ref.getName(), "BLOCKED", "Acteur bloqué, impossible de communiquer");
                 continue;
             }
 
             Mailbox mailbox = ref.mailbox();
-
-
 
             // On traite les messages en attente
             while (!mailbox.isEmpty()) {
