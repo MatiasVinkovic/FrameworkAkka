@@ -70,8 +70,8 @@ public class LocalActorRef implements ActorRef {
         // On crée un expéditeur temporaire pour capturer la réponse
         ActorRef callback = new ActorRef() {
             @Override public String getName() { return "ask-callback"; }
-            @Override public void tell(Message m) { future.complete((T) m); }
-            @Override public void tell(Message m, ActorContext ctx) { future.complete((T) m); }
+            @Override @SuppressWarnings("unchecked") public void tell(Message m) { future.complete((T) m); }
+            @Override @SuppressWarnings("unchecked") public void tell(Message m, ActorContext ctx) { future.complete((T) m); }
 
             @Override
             public void tell(Message msg, ActorRef sender) {

@@ -27,19 +27,20 @@ public class SAFShell {
     }
 
     private void runLoop() {
-        Scanner scanner = new Scanner(System.in);
-        while (true) {
-            try {
-                System.out.print("\nSAF-LOGIC > ");
-                String line = scanner.nextLine();
-                if (line.trim().isEmpty()) continue;
+        try (Scanner scanner = new Scanner(System.in)) {
+            while (true) {
+                try {
+                    System.out.print("\nSAF-LOGIC > ");
+                    String line = scanner.nextLine();
+                    if (line.trim().isEmpty()) continue;
 
-                String[] parts = line.split(" ");
-                String cmd = parts[0].toLowerCase();
+                    String[] parts = line.split(" ");
+                    String cmd = parts[0].toLowerCase();
 
-                handleCommand(cmd, parts);
-            } catch (Exception e) {
-                System.err.println("[SHELL ERROR] " + e.getMessage());
+                    handleCommand(cmd, parts);
+                } catch (Exception e) {
+                    System.err.println("[SHELL ERROR] " + e.getMessage());
+                }
             }
         }
     }
@@ -48,7 +49,9 @@ public class SAFShell {
         switch (cmd) {
             case "spawn":
                 // spawn client.ClientActor matias
-                system.createActor((Class<? extends Actor>) Class.forName(parts[1]), parts[2]);
+                @SuppressWarnings("unchecked")
+                Class<? extends Actor> actorClass = (Class<? extends Actor>) Class.forName(parts[1]);
+                system.createActor(actorClass, parts[2]);
                 System.out.println("[OK] Actor spawned.");
                 break;
             case "ref":
