@@ -81,10 +81,12 @@ public class SafMessageController {
         // On envoie le message avec notre expéditeur temporaire
         target.mailbox().enqueue(new MessageEnvelope(msg, temporarySender));
 
-        // On attend la réponse (timeout de 5 secondes pour éviter de bloquer Spring indéfiniment)
+        // On attend la réponse (timeout augmenté à 10 secondes pour les microservices)
         try {
             System.out.println("[REST-IN-SYNC] Attente réponse pour : " + msg.getClass().getSimpleName());
-            return futureResponse.get(5, TimeUnit.SECONDS);
+            Object result = futureResponse.get(10, TimeUnit.SECONDS);
+            System.out.println("[REST-IN-SYNC] Réponse reçue pour : " + msg.getClass().getSimpleName());
+            return result;
         } catch (Exception e) {
             throw new RuntimeException("Timeout : l'acteur n'a pas répondu dans les temps.");
         }

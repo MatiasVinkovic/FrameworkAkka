@@ -105,19 +105,33 @@ public class RestRemoteActorRef implements ActorRef {
     public <T> CompletableFuture<T> ask(Object message, Class<T> responseType) {
         // Exécution asynchrone de la requête réseau pour ne pas bloquer le thread appelant
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                String baseUrl = resolveTargetUrl();
-                if (baseUrl == null) throw new RuntimeException("Service " + serviceName + " introuvable");
+            int retries = 3;
+            for (int i = 0; i < retries; i++) {
+                try {
+                    String baseUrl = resolveTargetUrl();
+                    if (baseUrl == null) throw new RuntimeException("Service " + serviceName + " introuvable");
 
-                IncomingMessageDTO dto = createDTO((Message) message);
-                HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
+                    IncomingMessageDTO dto = createDTO((Message) message);
+                    HttpEntity<IncomingMessageDTO> entity = createHttpEntity(dto);
 
-                // Appel HTTP POST vers l'endpoint synchrone dédié [cite: 42]
-                return http.postForObject(baseUrl + "/actors/messages/ask", entity, responseType);
+                    // Appel HTTP POST vers l'endpoint synchrone dédié [cite: 42]
+                    T result = http.postForObject(baseUrl + "/actors/messages/ask", entity, responseType);
+                    LoggerService.log("INFO", actorName, "REMOTE_ASK_SUCCESS", "Ask réussi après " + (i + 1) + " tentative(s)");
+                    return result;
 
-            } catch (Exception e) {
-                throw new RuntimeException("Échec de la communication synchrone (ask) : " + e.getMessage(), e);
+                } catch (Exception e) {
+                    LoggerService.log("WARN", actorName, "REMOTE_ASK_RETRY", "Tentative " + (i + 1) + " échouée : " + e.getMessage());
+                    if (i == retries - 1) {
+                        throw new RuntimeException("Échec de la communication synchrone (ask) après " + retries + " tentatives : " + e.getMessage(), e);
+                    }
+                    try {
+                        Thread.sleep(1000); // Attendre 1 seconde avant retry
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
             }
+            throw new RuntimeException("Impossible d'atteindre le service après retries");
         });
     }
 

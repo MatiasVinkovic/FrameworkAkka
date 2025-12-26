@@ -1,11 +1,14 @@
 package com.saf.core;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ActorSystem {
     private final String name;
-    private final Map<String, LocalActorRef> actors = new HashMap<>();
+    private final Map<String, LocalActorRef> actors = new ConcurrentHashMap<>();
 
     public ActorSystem(String name) {
         this.name = name;
@@ -43,7 +46,10 @@ public class ActorSystem {
 
     // méthode de supervision
     public void processOneCycle() {
-        for (LocalActorRef ref : actors.values()) {
+        // Créer une copie pour éviter ConcurrentModificationException lors de la création d'acteurs
+        List<LocalActorRef> currentActors = new ArrayList<>(actors.values());
+        
+        for (LocalActorRef ref : currentActors) {
 
             if (ref.isBlocked()) {
                 // On saute cet acteur pour ce tour, ses messages restent dans la mailbox
